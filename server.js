@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
@@ -6,86 +5,62 @@ const cors = require("cors");
 const { nanoid } = require("nanoid");
 require("dotenv").config();
 
-// Models
-const Url = require("./models/url");
-const Click = require("./models/click");
+const Url = require("./models/Url");
+const Click = require("./models/Click");
 
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static("public")); // serve frontend if placed in 'public' folder
 
 // MongoDB connection
-mongoose
-  .connect(process.env.MONGO_URI)
+mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error("MongoDB Connection Error:", err));
-
-// Routes
+  .catch(err => console.error("MongoDB Connection Error:", err));
 
 // Shorten URL
 app.post("/shorten", async (req, res) => {
   const { longUrl } = req.body;
-  if (!longUrl) return res.status(400).json({ error: "Please provide a URL" });
+  if (!longUrl) return res.status(400).json({ error: "Long URL is required" });
 
-  try {
-    const shortId = nanoid(6);
-    const newUrl = new Url({ longUrl, shortId });
-    await newUrl.save();
+  const shortId = nanoid(6);
+  const newUrl = new Url({ longUrl, shortId });
+  await newUrl.save();
 
-    res.json({ shortUrl: `${process.env.BASE_URL}/${shortId}` });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
+  res.json({ shortUrl: `${process.env.BASE_URL}/${shortId}` });
 });
 
-// Redirect short URL
+// Redirect short URL to long URL
 app.get("/:shortId", async (req, res) => {
   const { shortId } = req.params;
+  const url = await Url.findOne({ shortId });
 
-  try {
-    const url = await Url.findOne({ shortId });
-    if (!url) return res.status(404).send("URL not found");
+  if (!url) return res.status(404).json({ error: "URL not found" });
 
-    // Record click
-    await Click.create({
-      urlId: url._id,
-      ip: req.ip,
-      userAgent: req.headers["user-agent"],
-    });
+  await Click.create({
+    urlId: url._id,
+    ip: req.ip,
+    userAgent: req.headers["user-agent"]
+  });
 
-    res.redirect(url.longUrl);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
+  res.redirect(url.longUrl);
 });
 
-// Analytics dashboard
-app.get("/dashboard/:shortId", async (req, res) => {
+// Analytics route
+app.get("/an/:shortId", async (req, res) => {
   const { shortId } = req.params;
+  const url = await Url.findOne({ shortId });
 
-  try {
-    const url = await Url.findOne({ shortId });
-    if (!url) return res.status(404).json({ error: "URL not found" });
+  if (!url) return res.status(404).json({ error: "URL not found" });
 
-    const clicks = await Click.find({ urlId: url._id });
+  const clicks = await Click.find({ urlId: url._id });
 
-    res.json({
-      shortId: url.shortId,
-      totalClicks: clicks.length,
-      uniqueVisitors: new Set(clicks.map((c) => c.ip)).size,
-      analytics: clicks,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Server error" });
-  }
+  res.json({
+    shortId: url.shortId,
+    totalClicks: clicks.length,
+    uniqueVisitors: new Set(clicks.map(c => c.ip)).size,
+    analytics: clicks
+  });
 });
 
-// Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

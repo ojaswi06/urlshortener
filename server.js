@@ -5,8 +5,8 @@ const cors = require("cors");
 const { nanoid } = require("nanoid");
 require("dotenv").config();
 
-const Url = require("./models/Url");
-const Click = require("./models/Click");
+const Url = require("./models/url");
+const Click = require("./models/click");
 
 const app = express();
 app.use(cors({ origin: "https://ojaswi06.github.io" })); // allow GitHub Pages

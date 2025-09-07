@@ -1,66 +1,63 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const { nanoid } = require("nanoid");
-require("dotenv").config();
+const shortenBtn = document.getElementById("shortenBtn");
+const longUrlInput = document.getElementById("longUrl");
+const resultBox = document.getElementById("result");
+const shortUrlLink = document.getElementById("shortUrl");
+const copyBtn = document.getElementById("copyBtn");
+const dashboardBtn = document.getElementById("dashboardBtn");
 
-const Url = require("./models/url");
-const Click = require("./models/click");
+// Backend on Render
+const backendURL = "https://urlshortenerbackend-4yhm.onrender.com";
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+// Validate URL
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.error("MongoDB Connection Error:", err));
+shortenBtn.addEventListener("click", async () => {
+  const longUrl = longUrlInput.value.trim();
+  if (!longUrl) return alert("Please enter a URL!");
+  if (!isValidUrl(longUrl)) return alert("Please enter a valid URL!");
 
-// Shorten URL
-app.post("/shorten", async (req, res) => {
-  const { longUrl } = req.body;
-  if (!longUrl) return res.status(400).json({ error: "Long URL is required" });
+  shortenBtn.disabled = true;
+  shortenBtn.textContent = "Shortening...";
 
-  const shortId = nanoid(6);
-  const newUrl = new Url({ longUrl, shortId });
-  await newUrl.save();
+  try {
+    const res = await fetch(`${backendURL}/shorten`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longUrl })
+    });
 
-  res.json({ shortUrl: `${process.env.BASE_URL}/${shortId}` });
+    if (!res.ok) throw new Error("Failed to shorten URL");
+
+    const data = await res.json();
+    shortUrlLink.href = `${backendURL}/${data.shortId}`;
+    shortUrlLink.textContent = `${backendURL}/${data.shortId}`;
+    resultBox.style.display = "block";
+
+  } catch (err) {
+    console.error(err);
+    alert("Error connecting to backend. Make sure backend is deployed!");
+  } finally {
+    shortenBtn.disabled = false;
+    shortenBtn.textContent = "Shorten";
+  }
 });
 
-// Redirect short URL to long URL
-app.get("/:shortId", async (req, res) => {
-  const { shortId } = req.params;
-  const url = await Url.findOne({ shortId });
-
-  if (!url) return res.status(404).json({ error: "URL not found" });
-
-  await Click.create({
-    urlId: url._id,
-    ip: req.ip,
-    userAgent: req.headers["user-agent"]
-  });
-
-  res.redirect(url.longUrl);
+copyBtn.addEventListener("click", () => {
+  if (shortUrlLink.textContent) {
+    navigator.clipboard.writeText(shortUrlLink.textContent);
+    alert("Copied to clipboard!");
+  }
 });
 
-// Analytics route
-app.get("/an/:shortId", async (req, res) => {
-  const { shortId } = req.params;
-  const url = await Url.findOne({ shortId });
-
-  if (!url) return res.status(404).json({ error: "URL not found" });
-
-  const clicks = await Click.find({ urlId: url._id });
-
-  res.json({
-    shortId: url.shortId,
-    totalClicks: clicks.length,
-    uniqueVisitors: new Set(clicks.map(c => c.ip)).size,
-    analytics: clicks
-  });
+dashboardBtn.addEventListener("click", () => {
+  if (!shortUrlLink.textContent) return;
+  const shortId = shortUrlLink.textContent.split("/").pop();
+  window.location.href = `dashboard.html?shortId=${shortId}`;
 });
-
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

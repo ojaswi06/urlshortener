@@ -5,19 +5,27 @@ const shortUrlLink = document.getElementById("shortUrl");
 const copyBtn = document.getElementById("copyBtn");
 const dashboardBtn = document.getElementById("dashboardBtn");
 
+// 🔹 Replace this with your Render backend URL
+const backendURL = "https://urlshortenerbackend.onrender.com";
+
 shortenBtn.addEventListener("click", async () => {
   const longUrl = longUrlInput.value.trim();
   if (!longUrl) return alert("Please enter a URL!");
 
-  const res = await fetch("/shorten", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ longUrl })
-  });
-  const data = await res.json();
-  shortUrlLink.href = data.shortUrl;
-  shortUrlLink.textContent = data.shortUrl;
-  resultBox.style.display = "block";
+  try {
+    const res = await fetch(`${backendURL}/shorten`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ longUrl })
+    });
+    const data = await res.json();
+    shortUrlLink.href = data.shortUrl;
+    shortUrlLink.textContent = data.shortUrl;
+    resultBox.style.display = "block";
+  } catch (err) {
+    alert("Error connecting to backend. Make sure backend is deployed!");
+    console.error(err);
+  }
 });
 
 copyBtn.addEventListener("click", () => {
@@ -27,5 +35,5 @@ copyBtn.addEventListener("click", () => {
 
 dashboardBtn.addEventListener("click", () => {
   const shortId = shortUrlLink.textContent.split("/").pop();
-  window.location.href = `/dashboard.html?shortId=${shortId}`;
+  window.location.href = `${backendURL}/dashboard.html?shortId=${shortId}`;
 });

@@ -1,63 +1,71 @@
-const shortenBtn = document.getElementById("shortenBtn");
-const longUrlInput = document.getElementById("longUrl");
-const resultBox = document.getElementById("result");
-const shortUrlLink = document.getElementById("shortUrl");
-const copyBtn = document.getElementById("copyBtn");
-const dashboardBtn = document.getElementById("dashboardBtn");
+const express = require("express");
+const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { nanoid } = require("nanoid");
+require("dotenv").config();
 
-// Backend on Render
-const backendURL = "https://urlshortenerbackend-4yhm.onrender.com";
+const Url = require("./models/Url");
+const Click = require("./models/Click");
 
-// Validate URL
-function isValidUrl(url) {
+const app = express();
+app.use(cors({ origin: "https://ojaswi06.github.io" })); // allow GitHub Pages
+app.use(bodyParser.json());
+
+// --- Shorten URL ---
+app.post("/shorten", async (req, res) => {
+  const { longUrl } = req.body;
+  if (!longUrl) return res.status(400).json({ message: "Missing longUrl" });
+
+  const shortId = nanoid(6);
+  const shortUrl = `${process.env.BACKEND_URL || req.get('host')}/${shortId}`;
+
+  const urlData = new Url({ longUrl, shortId });
+  await urlData.save();
+
+  res.json({ shortId, shortUrl });
+});
+
+// --- Redirect short URL ---
+app.get("/:shortId", async (req, res) => {
+  const shortId = req.params.shortId;
   try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
+    const urlData = await Url.findOne({ shortId });
+    if (!urlData) return res.status(404).send("Not Found");
 
-shortenBtn.addEventListener("click", async () => {
-  const longUrl = longUrlInput.value.trim();
-  if (!longUrl) return alert("Please enter a URL!");
-  if (!isValidUrl(longUrl)) return alert("Please enter a valid URL!");
+    // Record click
+    await Click.create({ shortId, timestamp: new Date() });
 
-  shortenBtn.disabled = true;
-  shortenBtn.textContent = "Shortening...";
-
-  try {
-    const res = await fetch(`${backendURL}/shorten`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ longUrl })
-    });
-
-    if (!res.ok) throw new Error("Failed to shorten URL");
-
-    const data = await res.json();
-    shortUrlLink.href = `${backendURL}/${data.shortId}`;
-    shortUrlLink.textContent = `${backendURL}/${data.shortId}`;
-    resultBox.style.display = "block";
-
+    // Redirect to original URL
+    res.redirect(urlData.longUrl);
   } catch (err) {
     console.error(err);
-    alert("Error connecting to backend. Make sure backend is deployed!");
-  } finally {
-    shortenBtn.disabled = false;
-    shortenBtn.textContent = "Shorten";
+    res.status(500).send("Server Error");
   }
 });
 
-copyBtn.addEventListener("click", () => {
-  if (shortUrlLink.textContent) {
-    navigator.clipboard.writeText(shortUrlLink.textContent);
-    alert("Copied to clipboard!");
+// --- Analytics ---
+app.get("/an/:shortId", async (req, res) => {
+  const shortId = req.params.shortId;
+  try {
+    const totalClicks = await Click.countDocuments({ shortId });
+    const clicks = await Click.find({ shortId });
+
+    const uniqueVisitors = new Set(clicks.map(c => c.ip)).size;
+
+    // Clicks per hour
+    const clicksPerHour = {};
+    clicks.forEach(c => {
+      const hour = new Date(c.timestamp).getHours();
+      clicksPerHour[hour] = (clicksPerHour[hour] || 0) + 1;
+    });
+
+    res.json({ totalClicks, uniqueVisitors, clicksPerHour });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
   }
 });
 
-dashboardBtn.addEventListener("click", () => {
-  if (!shortUrlLink.textContent) return;
-  const shortId = shortUrlLink.textContent.split("/").pop();
-  window.location.href = `dashboard.html?shortId=${shortId}`;
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

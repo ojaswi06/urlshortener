@@ -38,4 +38,5 @@ copyBtn.addEventListener("click", () => {
 dashboardBtn.addEventListener("click", () => {
   const shortId = shortUrlLink.textContent.split("/").pop();
   window.location.href = `${backendURL}/dashboard.html?shortId=${shortId}`;
+
 });

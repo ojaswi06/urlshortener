@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 const cors = require("cors");
 const { nanoid } = require("nanoid");
+const path = require("path");
 require("dotenv").config();
 
 const Url = require("./models/url");
@@ -12,13 +13,20 @@ const app = express();
 app.use(cors({ origin: "https://ojaswi06.github.io" })); // allow GitHub Pages
 app.use(bodyParser.json());
 
+// ✅ Serve frontend (public/index.html, script.js, style.css)
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
 // --- Shorten URL ---
 app.post("/shorten", async (req, res) => {
   const { longUrl } = req.body;
   if (!longUrl) return res.status(400).json({ message: "Missing longUrl" });
 
   const shortId = nanoid(6);
-  const shortUrl = `${process.env.BACKEND_URL || req.get('host')}/${shortId}`;
+  const shortUrl = `${process.env.BACKEND_URL || req.get("host")}/${shortId}`;
 
   const urlData = new Url({ longUrl, shortId });
   await urlData.save();
@@ -34,7 +42,7 @@ app.get("/:shortId", async (req, res) => {
     if (!urlData) return res.status(404).send("Not Found");
 
     // Record click
-    await Click.create({ shortId, timestamp: new Date() });
+    await Click.create({ shortId, timestamp: new Date(), ip: req.ip });
 
     // Redirect to original URL
     res.redirect(urlData.longUrl);
@@ -68,4 +76,4 @@ app.get("/an/:shortId", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

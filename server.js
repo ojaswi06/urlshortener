@@ -1,21 +1,32 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const { nanoid } = require("nanoid");
-const path = require("path");
-require("dotenv").config();
+import express from "express";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+import { nanoid } from "nanoid";
+import Url from "./models/url.js";
+import Click from "./models/click.js";
+import cors from "cors";
 
-const Url = require("./models/url");
-const Click = require("./models/click");
-
+dotenv.config();
 const app = express();
-app.use(cors({ origin: "https://ojaswi06.github.io" })); // allow GitHub Pages
-app.use(bodyParser.json());
+app.use(express.json());
 
-// ✅ Serve frontend (public/index.html, script.js, style.css)
+// CORS: Allow all origins for now (change in production)
+app.use(cors());
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.log(err));
+
+// Serve frontend (index.html, script.js, style.css)
 app.use(express.static(path.join(__dirname, "public")));
 
+// Root route
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -26,9 +37,9 @@ app.post("/shorten", async (req, res) => {
   if (!longUrl) return res.status(400).json({ message: "Missing longUrl" });
 
   const shortId = nanoid(6);
-  const shortUrl = `${process.env.BACKEND_URL || req.get("host")}/${shortId}`;
+  const shortUrl = `${process.env.BACKEND_URL}/${shortId}`;
 
-  const urlData = new Url({ longUrl, shortId });
+  const urlData = new Url({ longUrl, shortId, clicks: 0 });
   await urlData.save();
 
   res.json({ shortId, shortUrl });
@@ -75,5 +86,5 @@ app.get("/an/:shortId", async (req, res) => {
   }
 });
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

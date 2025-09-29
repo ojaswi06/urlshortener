@@ -5,7 +5,7 @@ const shortUrlLink = document.getElementById("shortUrl");
 const copyBtn = document.getElementById("copyBtn");
 const dashboardBtn = document.getElementById("dashboardBtn");
 
-// 🔹 Replace this with your deployed Render backend URL
+// 🔹 Your deployed Render backend URL
 const backendURL = "https://urlshortenerbackend-4yhm.onrender.com";
 
 shortenBtn.addEventListener("click", async () => {
@@ -20,7 +20,6 @@ shortenBtn.addEventListener("click", async () => {
     });
     const data = await res.json();
 
-    // Full backend link for redirect
     shortUrlLink.href = data.shortUrl;
     shortUrlLink.textContent = data.shortUrl;
     resultBox.style.display = "block";
@@ -37,6 +36,5 @@ copyBtn.addEventListener("click", () => {
 
 dashboardBtn.addEventListener("click", () => {
   const shortId = shortUrlLink.textContent.split("/").pop();
-  window.location.href = `${backendURL}/dashboard.html?shortId=${shortId}`;
-
+  window.location.href = `${backendURL}/an/${shortId}`;
 });

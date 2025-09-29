@@ -1,35 +1,16 @@
-import express from "express";
-import mongoose from "mongoose";
-import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
-import { nanoid } from "nanoid";
-import Url from "./models/url.js";
-import Click from "./models/click.js";
-import cors from "cors";
+const express = require("express");
+const mongoose = require("mongoose");
+const bodyParser = require("body-parser");
+const cors = require("cors");
+const { nanoid } = require("nanoid");
+require("dotenv").config();
 
-dotenv.config();
+const Url = require("./models/url");
+const Click = require("./models/click");
+
 const app = express();
-app.use(express.json());
-
-// CORS: Allow all origins for now (change in production)
-app.use(cors());
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// MongoDB connection
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log("✅ MongoDB Connected"))
-  .catch(err => console.log(err));
-
-// Serve frontend (index.html, script.js, style.css)
-app.use(express.static(path.join(__dirname, "public")));
-
-// Root route
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+app.use(cors({ origin: "*" })); // allow all origins (can restrict later)
+app.use(bodyParser.json());
 
 // --- Shorten URL ---
 app.post("/shorten", async (req, res) => {
@@ -37,9 +18,12 @@ app.post("/shorten", async (req, res) => {
   if (!longUrl) return res.status(400).json({ message: "Missing longUrl" });
 
   const shortId = nanoid(6);
-  const shortUrl = `${process.env.BACKEND_URL}/${shortId}`;
 
-  const urlData = new Url({ longUrl, shortId, clicks: 0 });
+  // Always include https://
+  const baseUrl = process.env.BACKEND_URL || `https://${req.get("host")}`;
+  const shortUrl = `${baseUrl}/${shortId}`;
+
+  const urlData = new Url({ longUrl, shortId });
   await urlData.save();
 
   res.json({ shortId, shortUrl });
@@ -55,7 +39,6 @@ app.get("/:shortId", async (req, res) => {
     // Record click
     await Click.create({ shortId, timestamp: new Date(), ip: req.ip });
 
-    // Redirect to original URL
     res.redirect(urlData.longUrl);
   } catch (err) {
     console.error(err);
@@ -72,7 +55,6 @@ app.get("/an/:shortId", async (req, res) => {
 
     const uniqueVisitors = new Set(clicks.map(c => c.ip)).size;
 
-    // Clicks per hour
     const clicksPerHour = {};
     clicks.forEach(c => {
       const hour = new Date(c.timestamp).getHours();
@@ -87,4 +69,4 @@ app.get("/an/:shortId", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

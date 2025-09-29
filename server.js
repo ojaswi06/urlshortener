@@ -1,16 +1,37 @@
-const express = require("express");
-const mongoose = require("mongoose");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const { nanoid } = require("nanoid");
-require("dotenv").config();
+import express from "express";
+import mongoose from "mongoose";
+import dotenv from "dotenv";
+import cors from "cors";
+import { nanoid } from "nanoid";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const Url = require("./models/url");
-const Click = require("./models/click");
+import Url from "./models/url.js";
+import Click from "./models/click.js";
 
+dotenv.config();
 const app = express();
-app.use(cors({ origin: "*" })); // allow all origins (can restrict later)
-app.use(bodyParser.json());
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// File path config (for static files)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.error("❌ MongoDB Error:", err));
+
+// Serve static files (frontend) from public folder
+app.use(express.static(path.join(__dirname, "public")));
+
+// --- Root route (show index.html) ---
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
 
 // --- Shorten URL ---
 app.post("/shorten", async (req, res) => {
@@ -18,10 +39,7 @@ app.post("/shorten", async (req, res) => {
   if (!longUrl) return res.status(400).json({ message: "Missing longUrl" });
 
   const shortId = nanoid(6);
-
-  // Always include https://
-  const baseUrl = process.env.BACKEND_URL || `https://${req.get("host")}`;
-  const shortUrl = `${baseUrl}/${shortId}`;
+  const shortUrl = `${process.env.BACKEND_URL || "https://urlshortenerbackend-4yhm.onrender.com"}/${shortId}`;
 
   const urlData = new Url({ longUrl, shortId });
   await urlData.save();
@@ -37,8 +55,14 @@ app.get("/:shortId", async (req, res) => {
     if (!urlData) return res.status(404).send("Not Found");
 
     // Record click
-    await Click.create({ shortId, timestamp: new Date(), ip: req.ip });
+    await Click.create({
+      shortId,
+      timestamp: new Date(),
+      ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
+      userAgent: req.headers["user-agent"]
+    });
 
+    // Redirect
     res.redirect(urlData.longUrl);
   } catch (err) {
     console.error(err);
@@ -53,15 +77,7 @@ app.get("/an/:shortId", async (req, res) => {
     const totalClicks = await Click.countDocuments({ shortId });
     const clicks = await Click.find({ shortId });
 
-    const uniqueVisitors = new Set(clicks.map(c => c.ip)).size;
-
-    const clicksPerHour = {};
-    clicks.forEach(c => {
-      const hour = new Date(c.timestamp).getHours();
-      clicksPerHour[hour] = (clicksPerHour[hour] || 0) + 1;
-    });
-
-    res.json({ totalClicks, uniqueVisitors, clicksPerHour });
+    res.json({ totalClicks, clicks });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Server Error" });
@@ -69,4 +85,4 @@ app.get("/an/:shortId", async (req, res) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));

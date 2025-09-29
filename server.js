@@ -11,24 +11,21 @@ import Click from "./models/click.js";
 
 dotenv.config();
 const app = express();
-
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// File path config (for static files)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// MongoDB connection
+// MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log("✅ MongoDB Connected"))
   .catch(err => console.error("❌ MongoDB Error:", err));
 
-// Serve static files (frontend) from public folder
+// Serve frontend static files
 app.use(express.static(path.join(__dirname, "public")));
 
-// --- Root route (show index.html) ---
+// Root route
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
@@ -41,45 +38,55 @@ app.post("/shorten", async (req, res) => {
   const shortId = nanoid(6);
   const shortUrl = `${process.env.BACKEND_URL || "https://urlshortenerbackend-4yhm.onrender.com"}/${shortId}`;
 
-  const urlData = new Url({ longUrl, shortId });
-  await urlData.save();
+  const newUrl = new Url({ longUrl, shortId });
+  await newUrl.save();
 
   res.json({ shortId, shortUrl });
 });
 
-// --- Redirect short URL ---
+// --- Redirect & Track Clicks ---
 app.get("/:shortId", async (req, res) => {
-  const shortId = req.params.shortId;
   try {
+    const shortId = req.params.shortId;
     const urlData = await Url.findOne({ shortId });
-    if (!urlData) return res.status(404).send("Not Found");
+    if (!urlData) return res.status(404).send("Short URL not found");
 
-    // Record click
+    // Track click with urlId
     await Click.create({
-      shortId,
-      timestamp: new Date(),
+      urlId: urlData._id,              // 👈 Must include for validation
       ip: req.headers["x-forwarded-for"] || req.socket.remoteAddress,
-      userAgent: req.headers["user-agent"]
+      userAgent: req.headers["user-agent"],
+      timestamp: new Date()
     });
 
-    // Redirect
     res.redirect(urlData.longUrl);
   } catch (err) {
-    console.error(err);
+    console.error("Redirect error:", err);
     res.status(500).send("Server Error");
   }
 });
 
 // --- Analytics ---
 app.get("/an/:shortId", async (req, res) => {
-  const shortId = req.params.shortId;
   try {
-    const totalClicks = await Click.countDocuments({ shortId });
-    const clicks = await Click.find({ shortId });
+    const shortId = req.params.shortId;
+    const urlData = await Url.findOne({ shortId });
+    if (!urlData) return res.status(404).json({ message: "Short URL not found" });
 
-    res.json({ totalClicks, clicks });
+    const clicks = await Click.find({ urlId: urlData._id }).sort({ timestamp: 1 });
+    const totalClicks = clicks.length;
+    const uniqueVisitors = new Set(clicks.map(c => c.ip)).size;
+
+    // Clicks per hour
+    const clicksPerHour = {};
+    clicks.forEach(c => {
+      const hour = new Date(c.timestamp).getHours();
+      clicksPerHour[hour] = (clicksPerHour[hour] || 0) + 1;
+    });
+
+    res.json({ longUrl: urlData.longUrl, totalClicks, uniqueVisitors, clicksPerHour, clicks });
   } catch (err) {
-    console.error(err);
+    console.error("Analytics error:", err);
     res.status(500).json({ message: "Server Error" });
   }
 });

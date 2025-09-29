@@ -1,10 +1,10 @@
-const mongoose = require('mongoose');
+import mongoose from "mongoose";
 
-const ClickSchema = new mongoose.Schema({
-  urlId: { type: mongoose.Schema.Types.ObjectId, ref: 'Url', required: true },
-  ip: String,
-  userAgent: String,
-  createdAt: { type: Date, default: Date.now }
+const clickSchema = new mongoose.Schema({
+  urlId: { type: mongoose.Schema.Types.ObjectId, ref: "Url", required: true },
+  ip: { type: String },
+  userAgent: { type: String },
+  timestamp: { type: Date, default: Date.now }
 });
 
-module.exports = mongoose.model('Click', ClickSchema);
+export default mongoose.model("Click", clickSchema);
